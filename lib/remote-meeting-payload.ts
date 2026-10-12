@@ -50,9 +50,9 @@ export function buildRemoteMeetingPayload(
     agenda_ids: agendaIds,
     outcome: toRemoteOutcome(record.outcome),
     photo_url: remoteMediaUrl(record.selfie_url),
-    // Existing-client fast path no longer captures a start photo (2026-07-16
-    // revision) — the column stays for the remote schema shape, just unset.
-    start_photo_url: null,
+    // Existing-client fast path's Start photo (2026-10-12). Null at insert
+    // time like the other photos — the queued 'start' upload patches it.
+    start_photo_url: remoteMediaUrl(record.start_photo_url),
     start_captured_at: record.start_captured_at ?? null,
     end_photo_url: remoteMediaUrl(record.end_photo_url),
     end_captured_at: record.end_captured_at ?? null,

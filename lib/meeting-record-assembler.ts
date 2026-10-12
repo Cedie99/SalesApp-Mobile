@@ -18,12 +18,14 @@ export interface MeetingStartCapture {
   capturedAt: string;
   gpsLat: number;
   gpsLng: number;
+  /** Fast path's Start photo (local URI). Absent for the full form and for drafts started before 2026-10-12. */
+  photoUri?: string;
 }
 
 interface BuildMeetingRecordCommon {
   clientId: string | null;
   agentId: string;
-  /** Auth uid (Storage RLS keys off `auth.uid()`, never `profileId`) — see NewMeetingRecord.photoToQueue's own doc. */
+  /** Auth uid (Storage RLS keys off `auth.uid()`, never `profileId`) — see NewMeetingRecord.photosToQueue's own doc. */
   authUserId: string;
   start: MeetingStartCapture;
   mode: MeetingMode;
@@ -97,11 +99,15 @@ export function buildMeetingRecord(input: BuildMeetingRecordInput): NewMeetingRe
       // B-085: every in-person fast-path visit IS a Client Office visit —
       // this screen has no separate location chip, matching captureOfficePin below.
       locationType: input.mode === 'online' ? 'Others' : 'Client Office',
+      start_photo_url: input.start.photoUri ?? null,
       end_photo_url: input.endPhoto.uri,
       end_captured_at: input.endPhoto.capturedAt,
       end_gps_lat: input.endPhoto.gpsLat,
       end_gps_lng: input.endPhoto.gpsLng,
-      photoToQueue: { kind: 'end', localUri: input.endPhoto.uri, userId: input.authUserId },
+      photosToQueue: [
+        ...(input.start.photoUri ? [{ kind: 'start' as const, localUri: input.start.photoUri, userId: input.authUserId }] : []),
+        { kind: 'end', localUri: input.endPhoto.uri, userId: input.authUserId },
+      ],
       captureOfficePin: input.mode === 'in_person',
     };
   }
@@ -118,7 +124,7 @@ export function buildMeetingRecord(input: BuildMeetingRecordInput): NewMeetingRe
     locationType: input.meetingLocation,
     locationName: input.meetingLocation === 'Others' ? input.otherLocation : null,
     remarks: input.remarks || null,
-    photoToQueue: { kind: 'selfie', localUri: input.selfieUri, userId: input.authUserId },
+    photosToQueue: [{ kind: 'selfie', localUri: input.selfieUri, userId: input.authUserId }],
     poEvidence: input.poEvidence
       ? { localPhotoUri: input.poEvidence.localPhotoUri, cycleId: input.poEvidence.cycleId, userId: input.authUserId }
       : null,

@@ -26,11 +26,12 @@ import { KeyboardAwareScrollView } from '../../../components/ui/KeyboardAwareScr
 
 /**
  * Existing-client fast path (revises ADR-015, 2026-07-16): select client →
- * Start button (GPS + timestamp only, no photo) → meeting (agenda ticks) →
- * end photo (photo + GPS + timestamp, as before). No form re-fill — client
- * info is display-only. Admin (web) manually validates the meeting by
- * matching the Start GPS to the End photo's GPS; duration is computed
- * web-side from the two timestamps, never here.
+ * Start photo (photo + GPS + timestamp; was location-only from 2026-07-16
+ * until 2026-10-12) → meeting (agenda ticks) → end photo (photo + GPS +
+ * timestamp). No form re-fill — client info is display-only. Admin (web)
+ * manually validates the meeting by matching the Start GPS to the End
+ * photo's GPS; duration is computed web-side from the two timestamps, never
+ * here.
  *
  * Step B (2026-08-02): the client/roster/draft/Start-confirm/companion/
  * elapsed-timer logic previously duplicated here and in `record.tsx` now
@@ -67,6 +68,20 @@ export default function RecordVisitScreen() {
   const [selectedAgendas, setSelectedAgendas] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  // Confirmed Start photo awaiting "Yes, start". Cleared (and PhotoCapture
+  // remounted via the key) whenever that Start is abandoned or blocked.
+  const [startPhoto, setStartPhoto] = useState<CapturedPhoto | null>(null);
+  const [startPhotoKey, setStartPhotoKey] = useState(0);
+
+  function handleStartPhoto(photo: CapturedPhoto): void {
+    setStartPhoto(photo);
+    void requestStartMeeting();
+  }
+
+  function resetStartPhoto(): void {
+    setStartPhoto(null);
+    setStartPhotoKey((key) => key + 1);
+  }
 
   // Vince 2026-08-09: silent same-process resume path (see record.tsx's
   // identical render-time adjustment) — the controller already restored
@@ -223,7 +238,8 @@ export default function RecordVisitScreen() {
             mode={mode}
             onModeChange={setMode}
             starting={starting}
-            onStart={requestStartMeeting}
+            onStart={handleStartPhoto}
+            photoResetKey={startPhotoKey}
             actionName={visitActionName(getClientStatus(client))}
             showCompanionPicker={role !== 'sales_manager'}
           />
@@ -242,16 +258,23 @@ export default function RecordVisitScreen() {
 
       <StartMeetingConfirmDialog
         visible={startConfirmOpen}
-        onCancel={cancelStartMeeting}
+        message="Your start photo, location and time will be saved, and the meeting timer starts."
+        onCancel={() => {
+          cancelStartMeeting();
+          resetStartPhoto();
+        }}
         onConfirm={() => {
-          void confirmStartMeeting();
+          void confirmStartMeeting(startPhoto ?? undefined);
         }}
       />
 
       <OngoingMeetingWarningDialog
         visible={ongoingMeetingWarning !== null}
         unavailable={ongoingMeetingWarning === 'unavailable'}
-        onClose={closeOngoingMeetingWarning}
+        onClose={() => {
+          closeOngoingMeetingWarning();
+          resetStartPhoto();
+        }}
       />
 
       <CancelMeetingDialog

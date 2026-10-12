@@ -37,13 +37,15 @@ export interface NewMeetingRecord {
   operationId?: string;
   client_id: string | null;
   agent_id: string;
-  /** Start-of-meeting GPS (existing-client fast path: bound to the Start button tap, no photo — see 2026-07-16 revision). */
+  /** Start-of-meeting GPS (existing-client fast path: bound to the Start photo's shutter press; drafts started before 2026-10-12 have no photo). */
   gps_lat: number;
   gps_lng: number;
   meeting_mode: MeetingMode;
   agendas: string[];
   outcome: MeetingOutcome | null;
   selfie_url?: string | null;
+  /** Existing-client fast path's Start photo — the local `file://` URI until its queued upload patches in the public URL. */
+  start_photo_url?: string | null;
   start_captured_at?: string | null;
   end_photo_url?: string | null;
   end_captured_at?: string | null;
@@ -62,23 +64,23 @@ export interface NewMeetingRecord {
   locationName?: string | null;
   remarks?: string | null;
   /**
-   * Phase C (ADR-026 P1 item 4): when the screen just captured a photo,
+   * Phase C (ADR-026 P1 item 4): for each photo the screen captured,
    * `createMeeting()` queues its upload internally right after the local
    * insert commits — the single call site both recording screens now share,
    * instead of each screen duplicating "insert, then enqueue" itself.
    * `userId` is the Auth uid (Storage RLS keys off `auth.uid()`, never
    * `profileId` — same split as the old `uploadMeetingPhoto()` call sites).
    */
-  photoToQueue?: {
+  photosToQueue?: {
     kind: PhotoKind;
     localUri: string;
     userId: string;
-  } | null;
+  }[];
   /** ADR-030 Pass 2.5: 0–2 companions picked in Record Meeting's "Kasama sa visit" section — optional/omittable, never gates the save. */
   companions?: CompanionSelection[];
   /** @deprecated Manager-side pre-accepted companion requests were removed; retained as an ignored compatibility field for old drafts/tests. */
   companionsPreAccepted?: boolean;
-  /** ADR-044/046 point 7 (Batch 3, Slice 5): PO evidence for an In Progress client's 'Close deal' agenda. `cycleId` is `Client.cycle_id` (required NOT NULL by `po_confirmation_requests`); `userId` is the Auth uid, same split as `photoToQueue.userId`. Omitted when not applicable. */
+  /** ADR-044/046 point 7 (Batch 3, Slice 5): PO evidence for an In Progress client's 'Close deal' agenda. `cycleId` is `Client.cycle_id` (required NOT NULL by `po_confirmation_requests`); `userId` is the Auth uid, same split as `photosToQueue[].userId`. Omitted when not applicable. */
   poEvidence?: { localPhotoUri: string; cycleId: string; userId: string } | null;
   /** Batch 4: true only for a 'Client Office' in-person meeting ([[Office-Location-Spec-2026-07-29]]). A boolean, not coordinates — the office pin comes only from THIS meeting's own start GPS above, never a second capture. Online/Others must never set this true. */
   captureOfficePin?: boolean;
@@ -183,14 +185,13 @@ async function createMeetingOnce(record: NewMeetingRecord): Promise<string> {
     now,
   });
 
-  // Phase C (ADR-026 P1 item 4): queue the confirmed photo's upload only
+  // Phase C (ADR-026 P1 item 4): queue each confirmed photo's upload only
   // AFTER the meeting row + its own outbox insert have committed — the
   // upload's eventual remote patch (enqueueMeetingPhotoUrlUpdate) targets
   // this meeting by id, so the meeting must already exist locally first.
   // Best-effort: a queueing failure here must never undo an already-saved
   // meeting (ADR-026 P1's whole point is that the meeting is never lost).
-  if (record.photoToQueue) {
-    const { kind, localUri, userId } = record.photoToQueue;
+  for (const { kind, localUri, userId } of record.photosToQueue ?? []) {
     const storagePath = buildMeetingPhotoStoragePath(userId, id, kind);
     try {
       await enqueuePendingUpload(db, {
