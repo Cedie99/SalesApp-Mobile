@@ -124,6 +124,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <KeyboardAwareScrollView
+        keyboardSpacer={false}
         style={{ backgroundColor: BIZLINK_COLORS.ink }}
         contentContainerStyle={{ flexGrow: 1, justifyContent: keyboardFocused ? 'flex-start' : 'center', paddingHorizontal: 24, paddingVertical: keyboardFocused ? 32 : 0, paddingBottom: keyboardFocused ? 180 : 0 }}
         keyboardShouldPersistTaps="handled"
