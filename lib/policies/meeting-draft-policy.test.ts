@@ -40,3 +40,14 @@ describe('meeting draft companion payload', () => {
     expect(restoreCompanionsFromDraft([{ profileId: 'm1', kind: 'teammate' }], roster)).toEqual([]);
   });
 });
+
+describe('meeting draft Start photo payload', () => {
+  it('round-trips the Start photo URI and drops empty/invalid values', () => {
+    const base = { mode: 'in_person' as const, gpsLat: 1, gpsLng: 2, capturedAt: 'today' };
+    expect(normalizeMeetingDraftPayload(JSON.parse(JSON.stringify({ ...base, startPhotoUri: 'file://start.jpg' }))).startPhotoUri)
+      .toBe('file://start.jpg');
+    expect(normalizeMeetingDraftPayload({ ...base, startPhotoUri: '' })).not.toHaveProperty('startPhotoUri');
+    expect(normalizeMeetingDraftPayload({ ...base, startPhotoUri: 42 })).not.toHaveProperty('startPhotoUri');
+    expect(normalizeMeetingDraftPayload(base)).not.toHaveProperty('startPhotoUri');
+  });
+});

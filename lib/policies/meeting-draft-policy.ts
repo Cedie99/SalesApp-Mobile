@@ -23,6 +23,8 @@ export interface MeetingDraftPayload {
    * persisted — see lib/policies/meeting-draft-resume-policy.ts.
    */
   agendas?: string[];
+  /** Fast path's Start photo (local URI, 2026-10-12) — persisted with the GPS/time lock it was taken with so a resumed meeting still saves it. */
+  startPhotoUri?: string;
 }
 
 function isMeetingMode(value: unknown): value is MeetingMode {
@@ -59,6 +61,7 @@ export function normalizeMeetingDraftPayload(value: unknown): MeetingDraftPayloa
     capturedAt: record.capturedAt,
     ...(companions ? { companions } : {}),
     ...(agendas ? { agendas } : {}),
+    ...(typeof record.startPhotoUri === 'string' && record.startPhotoUri.length > 0 ? { startPhotoUri: record.startPhotoUri } : {}),
     ...(typeof record.operationId === 'string' && record.operationId.length > 0 ? { operationId: record.operationId } : {}),
   };
 }

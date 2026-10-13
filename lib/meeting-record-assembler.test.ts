@@ -204,3 +204,49 @@ describe('buildMeetingRecord — F-003 gap fix: full-form end GPS parity with fa
     expect(record.end_captured_at).toBeNull();
   });
 });
+
+describe('buildMeetingRecord — fast-path Start photo (2026-10-12)', () => {
+  const END_PHOTO = { uri: 'file://end.jpg', capturedAt: '2026-08-02T09:30:00.000Z', gpsLat: 14.6, gpsLng: 120.99 };
+
+  it('stores the Start photo locally and queues both start and end uploads', () => {
+    const visit = buildMeetingRecord({
+      ...COMMON,
+      start: { ...START, photoUri: 'file://start.jpg' },
+      flow: 'visit',
+      endPhoto: END_PHOTO,
+    });
+
+    expect(visit.start_photo_url).toBe('file://start.jpg');
+    expect(visit.end_photo_url).toBe('file://end.jpg');
+    expect(visit.photosToQueue).toEqual([
+      { kind: 'start', localUri: 'file://start.jpg', userId: 'auth-uid-1' },
+      { kind: 'end', localUri: 'file://end.jpg', userId: 'auth-uid-1' },
+    ]);
+  });
+
+  it('still saves a meeting resumed from a pre-2026-10-12 draft that has no Start photo', () => {
+    const visit = buildMeetingRecord({ ...COMMON, flow: 'visit', endPhoto: END_PHOTO });
+
+    expect(visit.start_photo_url).toBeNull();
+    expect(visit.photosToQueue).toEqual([{ kind: 'end', localUri: 'file://end.jpg', userId: 'auth-uid-1' }]);
+  });
+
+  it('full form keeps queuing only its selfie', () => {
+    const full = buildMeetingRecord({
+      ...COMMON,
+      flow: 'full',
+      selfieUri: 'file://selfie.jpg',
+      outcome: 'Successful',
+      contactName: '',
+      contactPosition: '',
+      meetingLocation: 'Client Office',
+      otherLocation: '',
+      remarks: '',
+      poEvidence: null,
+      endGps: null,
+    });
+
+    expect(full.start_photo_url).toBeUndefined();
+    expect(full.photosToQueue).toEqual([{ kind: 'selfie', localUri: 'file://selfie.jpg', userId: 'auth-uid-1' }]);
+  });
+});

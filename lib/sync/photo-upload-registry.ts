@@ -18,9 +18,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 export type PhotoParentTable = 'meetings' | 'collection_visits' | 'purchase_orders' | 'po_confirmation_requests';
 
-// selfie/start/end = meetings (existing); the rest are F-007 collection &
-// delivery proofs. 'start' intentionally has NO registry entry below and so
-// fails fast — it's schema headroom no screen produces (ADR-028). 'signature'
+// selfie/start/end = meetings; the rest are F-007 collection & delivery
+// proofs. 'start' is the existing-client fast path's Start photo
+// (record-visit.tsx, 2026-10-12 — reverses the 2026-07-16 location-only
+// Start; the column was kept as schema headroom until then). 'signature'
 // (delivery receiver signature) IS wired (SignaturePad renders to a JPEG as of
 // Phase 2b). Note the REMITTANCE signatures don't use this lane at all — those
 // tables have no UPDATE RLS policy, so their URLs go in the insert directly
@@ -64,6 +65,7 @@ export interface PhotoUploadKindConfig {
 export const PHOTO_UPLOAD_KINDS: Partial<Record<PhotoKind, PhotoUploadKindConfig>> = {
   // meetings (unchanged from the original meeting-only lane)
   selfie: { parentTable: 'meetings', bucket: 'meeting-photos', remoteColumn: 'photo_url', localColumn: 'selfie_url' },
+  start: { parentTable: 'meetings', bucket: 'meeting-photos', remoteColumn: 'start_photo_url', localColumn: 'start_photo_url' },
   end: { parentTable: 'meetings', bucket: 'meeting-photos', remoteColumn: 'end_photo_url', localColumn: 'end_photo_url' },
   // B-127: same bucket as meeting photos — web migration 078 already grants
   // the scoped SELECT/UPDATE this lane needs on `meeting-photos`.

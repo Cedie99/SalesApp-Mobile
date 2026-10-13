@@ -14,6 +14,7 @@ import {
   getDraftForClient,
   deleteDraft,
   type MeetingDraft,
+  type MeetingDraftPayload,
 } from './meeting-drafts';
 import { markLiveSession, hasLiveSession, clearLiveSession } from './meeting-live-session';
 import { checkMeetingStartAllowed } from './meeting-ongoing-guard';
@@ -27,6 +28,26 @@ export interface MeetingStartCapture {
   capturedAt: string;
   gpsLat: number;
   gpsLng: number;
+  /** record-visit.tsx's Start photo (local URI). The full form never sets it; drafts started before 2026-10-12 don't have one. */
+  photoUri?: string;
+}
+
+/** Start photo taken before "Yes, start" — its first-shutter GPS/time become the meeting's start lock (PhotoCapture's ADR-015 semantics). */
+export interface MeetingStartPhoto {
+  uri: string;
+  capturedAt: string;
+  gpsLat: number;
+  gpsLng: number;
+}
+
+function startFromDraft(payload: MeetingDraftPayload): MeetingStartCapture {
+  return {
+    operationId: payload.operationId,
+    capturedAt: payload.capturedAt,
+    gpsLat: payload.gpsLat,
+    gpsLng: payload.gpsLng,
+    ...(payload.startPhotoUri ? { photoUri: payload.startPhotoUri } : {}),
+  };
 }
 
 export type MeetingRecordingFlow = 'full' | 'visit';
@@ -178,12 +199,7 @@ export function useMeetingRecordingController({ clientId, flow }: UseMeetingReco
     if (!hasCompanions || rosterLoaded) {
       setLastAutoResumedDraftId(autoResumeDraft.id);
       setMode(autoResumeDraft.payload.mode);
-      setStart({
-        operationId: autoResumeDraft.payload.operationId,
-        capturedAt: autoResumeDraft.payload.capturedAt,
-        gpsLat: autoResumeDraft.payload.gpsLat,
-        gpsLng: autoResumeDraft.payload.gpsLng,
-      });
+      setStart(startFromDraft(autoResumeDraft.payload));
       setSelectedCompanions(hasCompanions ? restoreCompanionsFromDraft(autoResumeDraft.payload.companions, visibleRoster) : []);
       setAutoResumedAgendas(autoResumeDraft.payload.agendas ?? []);
     }
@@ -225,8 +241,12 @@ export function useMeetingRecordingController({ clientId, flow }: UseMeetingReco
    * happens after "Yes, start". The draft write must succeed before the UI
    * becomes in-progress: it is the durable record that enforces the one
    * ongoing-meeting limit across every route.
+   *
+   * 2026-10-12: record-visit.tsx passes its Start photo here — the photo's
+   * own GPS/timestamp become the start lock (no second GPS fetch), mirroring
+   * how the End photo binds the end. The full form passes nothing.
    */
-  const confirmStartMeeting = useCallback(async (): Promise<void> => {
+  const confirmStartMeeting = useCallback(async (startPhoto?: MeetingStartPhoto): Promise<void> => {
     setStartConfirmOpen(false);
     if (!clientId || !profileId) return;
     const guard = await checkMeetingStartAllowed(profileId, clientId);
@@ -236,8 +256,8 @@ export function useMeetingRecordingController({ clientId, flow }: UseMeetingReco
     }
     setStarting(true);
     try {
-      const gps = await captureGps();
-      const capturedAt = new Date().toISOString();
+      const gps = startPhoto ? { lat: startPhoto.gpsLat, lng: startPhoto.gpsLng } : await captureGps();
+      const capturedAt = startPhoto?.capturedAt ?? new Date().toISOString();
       const operationId = uuidv4();
       try {
         await saveDraft({
@@ -251,9 +271,16 @@ export function useMeetingRecordingController({ clientId, flow }: UseMeetingReco
             gpsLng: gps.lng,
             capturedAt,
             companions: companionsForDraft(currentVisibleCompanions()),
+            ...(startPhoto ? { startPhotoUri: startPhoto.uri } : {}),
           },
         });
-        setStart({ operationId, capturedAt, gpsLat: gps.lat, gpsLng: gps.lng });
+        setStart({
+          operationId,
+          capturedAt,
+          gpsLat: gps.lat,
+          gpsLng: gps.lng,
+          ...(startPhoto ? { photoUri: startPhoto.uri } : {}),
+        });
         // From this point on, this JS process "owns" the meeting — leaving
         // and returning to this screen (still the same app run) must never
         // ask again; see lib/meeting-live-session.ts.
@@ -299,6 +326,7 @@ export function useMeetingRecordingController({ clientId, flow }: UseMeetingReco
             capturedAt: start.capturedAt,
             companions: companionsForDraft(currentVisibleCompanions()),
             agendas,
+            ...(start.photoUri ? { startPhotoUri: start.photoUri } : {}),
           },
         });
       } catch (err) {
@@ -322,12 +350,7 @@ export function useMeetingRecordingController({ clientId, flow }: UseMeetingReco
       return;
     }
     setMode(pendingDraft.payload.mode);
-    setStart({
-      operationId: pendingDraft.payload.operationId,
-      capturedAt: pendingDraft.payload.capturedAt,
-      gpsLat: pendingDraft.payload.gpsLat,
-      gpsLng: pendingDraft.payload.gpsLng,
-    });
+    setStart(startFromDraft(pendingDraft.payload));
     setSelectedCompanions(restoreCompanionsFromDraft(pendingDraft.payload.companions, visibleRoster));
     setPendingDraft(null);
     // The one required confirmation after a real interruption is done —

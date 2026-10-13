@@ -67,7 +67,7 @@ export async function insertMeetingRecord(params: InsertMeetingRecordParams): Pr
           JSON.stringify(agendaIds),
           record.outcome,
           record.meeting_mode,
-          null,
+          record.start_photo_url ?? null,
           record.start_captured_at ?? null,
           record.end_photo_url ?? null,
           record.end_captured_at ?? null,
