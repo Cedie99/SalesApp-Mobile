@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sales App",
     "slug": "OracleSalesApp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/oracle-logo.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,8 @@
       }
     },
     "android": {
-      "package": "com.oracle.salesapp",
+      "package": "com.oracle.salesapp.v2",
+      "versionCode": 2,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/oracle-logo.png",
@@ -79,9 +80,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "88e83142-28ca-439f-8e88-4da233d9fa5c"
+        "projectId": "373d7bee-4468-422b-88a8-20aab68d33f4"
       }
     },
-    "owner": "vincecarter123"
+    "owner": "cediedotron"
   }
 }
