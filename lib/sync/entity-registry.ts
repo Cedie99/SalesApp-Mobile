@@ -10,6 +10,7 @@ import {
   upsertSyncedRemittance,
   upsertSyncedTagAlongRequest,
 } from './entity-appliers';
+import { collectorVisitScopeFilter } from './collection-visit-scope';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 // T-014 (ADR-022 #9): single source of truth for "what tables sync" —
@@ -229,17 +230,17 @@ export const ENTITY_REGISTRY: Record<EntityTableName, SyncEntityConfig> = {
       },
     ],
   },
-  // F-007 (web 043-046): the admin publishes the day's list; field roles read
-  // the WHOLE list (RLS scopes by role) and update rows they claim/work — they
-  // never INSERT, and client_name/area/claimed_by_name are denormalized, so
-  // there's no `clients` dependency. `applyScope` returns the query unchanged
-  // to defeat pullEntity's default per-agent `.eq()` scope (whole-day pull).
+  // F-007 (web 043-046): the admin publishes the day's list; collectors update
+  // rows they claim/work — they never INSERT, and client_name/area/
+  // claimed_by_name are denormalized, so there's no `clients` dependency.
+  // Web 144: each store is assigned to one collector, and the pull fetches only
+  // the collector's own stores — see lib/sync/collection-visit-scope.ts.
   collection_visits: {
     remoteTable: 'collection_visits',
     priority: 40,
     onConflict: 'id',
     applyRemoteRow: upsertSyncedCollectionVisit,
-    applyScope: (query) => query,
+    applyScope: (query, agentId) => query.or(collectorVisitScopeFilter(agentId)),
   },
   purchase_orders: {
     remoteTable: 'purchase_orders',
