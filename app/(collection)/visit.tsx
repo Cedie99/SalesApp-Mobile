@@ -26,8 +26,10 @@ import { BizSectionHeader } from '../../components/bizlink/BizSectionHeader';
 import { BizButton } from '../../components/bizlink/BizButton';
 import { PhotoSlot } from '../../components/collection-delivery/PhotoSlot';
 import { StoreLocationCard } from '../../components/collection-delivery/StoreLocationCard';
+import { ListingInstructionBadges } from '../../components/collection-delivery/ListingInstructionBadges';
 import { SignaturePad, type SignaturePadHandle } from '../../components/collection-delivery/SignaturePad';
-import { formatCapturedTimestamp, formatPeso, isOpenForCollection, remainingBalance, type PaymentMethod } from '../../lib/collection-delivery-data';
+import { DatePickerModal } from '../../components/maps/DatePickerModal';
+import { formatCapturedTimestamp, formatPeso, isOpenForCollection, remainingBalance, rescheduleTargetIso, type PaymentMethod } from '../../lib/collection-delivery-data';
 import { useNow } from '../../lib/use-now';
 import { claimStop, collectPayment, markAdditionalSeen, releaseStop, rescheduleVisit } from '../../lib/collection-delivery-write';
 import { runSync } from '../../lib/sync-engine';
@@ -133,7 +135,10 @@ export default function CollectPaymentScreen() {
     markAdditionalSeen(db, storeId, profileId).catch(() => {});
   }, [db, storeId, profileId, store?.isAdditional, store?.additionalSeenAt]);
 
-  const [payMode, setPayMode] = useState<PayMode>('cash');
+  const [chosenMode, setPayMode] = useState<PayMode>('cash');
+  // web 143: a store the office set to "pay at counter" is locked to that method —
+  // the server rejects any other (23514), so the collector can't pick it here.
+  const payMode: PayMode = store?.designatedMethod ?? chosenMode;
   const [payPhotoUri, setPayPhotoUri] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   // Flips true once the collector leaves the amount field — an early trigger
@@ -143,6 +148,11 @@ export default function CollectPaymentScreen() {
   // still missing — reveals the red state on EVERY skipped field at once.
   const [attempted, setAttempted] = useState(false);
   const [remarks, setRemarks] = useState('');
+  const [reschedOpen, setReschedOpen] = useState(false);
+  const [tomorrow] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  });
   // Customer acknowledgment signature — captured for every payment method.
   const [signed, setSigned] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -270,23 +280,12 @@ export default function CollectPaymentScreen() {
     }
   }
 
-  function reschedule(): void {
-    Alert.alert(
-      'Reschedule visit',
-      `${store?.name ?? 'Store'} — won’t make it there today?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reschedule to tomorrow',
-          onPress: async () => {
-            if (!profileId) return;
-            const tomorrow = new Date(Date.now() + 86400000).toISOString();
-            await rescheduleVisit(db, storeId, tomorrow, profileId, remarks);
-            router.back();
-          },
-        },
-      ]
-    );
+  // The collector picks the new day on a calendar (tomorrow onward), replacing
+  // the old fixed "Reschedule to tomorrow".
+  async function rescheduleTo(day: Date): Promise<void> {
+    if (!profileId) return;
+    await rescheduleVisit(db, storeId, rescheduleTargetIso(day, new Date()), profileId, remarks);
+    router.back();
   }
 
   if (loading || !store) {
@@ -316,9 +315,12 @@ export default function CollectPaymentScreen() {
           marginTop={6}
         >
           <Avatar initials={store.initials} background={BIZLINK_COLORS.tintA} color={BIZLINK_COLORS.ink} />
-          <YStack>
+          <YStack flex={1}>
             <Text fontFamily={BIZLINK_FONTS.semibold} fontSize={15} color={BIZLINK_COLORS.text}>{store.name}</Text>
             <Text fontSize={12.5} fontFamily={BIZLINK_FONTS.medium} color={BIZLINK_COLORS.muted}>{store.area}, {store.province ?? 'Bataan'}</Text>
+            <XStack gap="$1.5" flexWrap="wrap" marginTop={4}>
+              <ListingInstructionBadges store={store} />
+            </XStack>
           </YStack>
         </XStack>
 
@@ -388,13 +390,27 @@ export default function CollectPaymentScreen() {
 
         {/* Payment method */}
         <BizSectionHeader title="Payment method" />
-        <XStack gap="$2" flexWrap="wrap">
-          <PayTile icon={<Banknote size={14} color={iconColor('cash')} strokeWidth={1.75} />} label="Cash" selected={payMode === 'cash'} onPress={() => setPayMode('cash')} />
-          <PayTile icon={<FileCheck size={14} color={iconColor('check')} strokeWidth={1.75} />} label="Check" selected={payMode === 'check'} onPress={() => setPayMode('check')} />
-          <PayTile icon={<Smartphone size={14} color={iconColor('gcash')} strokeWidth={1.75} />} label="GCash" selected={payMode === 'gcash'} onPress={() => setPayMode('gcash')} />
-          <PayTile icon={<Receipt size={14} color={iconColor('counter')} strokeWidth={1.75} />} label="Counter" selected={payMode === 'counter'} onPress={() => setPayMode('counter')} />
-          <PayTile icon={<FileText size={14} color={iconColor('delivery_receipt')} strokeWidth={1.75} />} label="Delivery Receipt" selected={payMode === 'delivery_receipt'} onPress={() => setPayMode('delivery_receipt')} />
-        </XStack>
+        {store.designatedMethod === 'counter' ? (
+          <YStack gap="$2">
+            <XStack>
+              <PayTile icon={<Receipt size={14} color={iconColor('counter')} strokeWidth={1.75} />} label="Counter" selected onPress={() => {}} />
+            </XStack>
+            <XStack alignItems="center" gap="$2">
+              <Lock size={13} color={BIZLINK_COLORS.muted} strokeWidth={1.75} />
+              <Text flex={1} fontSize={12} fontFamily={BIZLINK_FONTS.medium} color={BIZLINK_COLORS.muted}>
+                Set by the office: this store pays at the counter.
+              </Text>
+            </XStack>
+          </YStack>
+        ) : (
+          <XStack gap="$2" flexWrap="wrap">
+            <PayTile icon={<Banknote size={14} color={iconColor('cash')} strokeWidth={1.75} />} label="Cash" selected={payMode === 'cash'} onPress={() => setPayMode('cash')} />
+            <PayTile icon={<FileCheck size={14} color={iconColor('check')} strokeWidth={1.75} />} label="Check" selected={payMode === 'check'} onPress={() => setPayMode('check')} />
+            <PayTile icon={<Smartphone size={14} color={iconColor('gcash')} strokeWidth={1.75} />} label="GCash" selected={payMode === 'gcash'} onPress={() => setPayMode('gcash')} />
+            <PayTile icon={<Receipt size={14} color={iconColor('counter')} strokeWidth={1.75} />} label="Counter" selected={payMode === 'counter'} onPress={() => setPayMode('counter')} />
+            <PayTile icon={<FileText size={14} color={iconColor('delivery_receipt')} strokeWidth={1.75} />} label="Delivery Receipt" selected={payMode === 'delivery_receipt'} onPress={() => setPayMode('delivery_receipt')} />
+          </XStack>
+        )}
 
         {/* Payment photo */}
         <BizSectionHeader title="Payment photo" helper="· camera only" />
@@ -521,7 +537,7 @@ export default function CollectPaymentScreen() {
           <BizButton
             label="Reschedule"
             variant="white"
-            onPress={reschedule}
+            onPress={() => setReschedOpen(true)}
             disabled={claimedByOther}
             icon={<CalendarClock size={17} color={BIZLINK_COLORS.text} strokeWidth={1.75} />}
             style={{ flex: 1 }}
@@ -541,6 +557,15 @@ export default function CollectPaymentScreen() {
           Works even without signal — saved on your phone and synced automatically later.
         </Text>
       </KeyboardAwareScrollView>
+      <DatePickerModal
+        visible={reschedOpen}
+        title="Reschedule to"
+        selectedDate={tomorrow}
+        minDate={tomorrow}
+        confirmLabel={(d) => `Reschedule to ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+        onSelectDate={(d) => { void rescheduleTo(d); }}
+        onClose={() => setReschedOpen(false)}
+      />
     </YStack>
   );
 }

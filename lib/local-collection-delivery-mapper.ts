@@ -42,6 +42,10 @@ export interface LocalCollectionVisitRow {
   additional_seen_at: string | null;
   /** Local-only intent: 1 once the collector opens an additional store; cleared when the seen RPC lands. */
   additional_seen_pending: number | null;
+  /** web 143 office-set payment method ('counter'); null = collector's choice. */
+  designated_payment_method: string | null;
+  /** web 145: 1 = a down payment the customer sizes (amount_due 0). */
+  is_down_payment: number | null;
   created_at: string | null;
   updated_at: string | null;
   /** Stamped with `now` each time sync-down writes this row into the local mirror — i.e. when this list landed on THIS device. */
@@ -152,6 +156,8 @@ export function rowToStore(row: LocalCollectionVisitRow): CollectionStore {
     // "received in app" time shown on Today's List.
     syncedAt: row.local_updated_at ?? undefined,
     scheduledFor: row.scheduled_for ?? undefined,
+    designatedMethod: (row.designated_payment_method as PaymentMethod | null) ?? undefined,
+    isDownPayment: row.is_down_payment === 1,
   };
 }
 

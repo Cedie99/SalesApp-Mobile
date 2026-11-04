@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isOpenForDelivery, remainingCod, type DeliveryPo } from './collection-delivery-data';
+import { dueLabel, isOpenForDelivery, remainingCod, rescheduleTargetIso, type DeliveryPo } from './collection-delivery-data';
 
 // F-007 Delivery partial COD (web 073): the pure helpers that drive the
 // "stays open with a carried balance" display + top-up math.
@@ -29,5 +29,32 @@ describe('isOpenForDelivery', () => {
 
   it.each(['delivered', 'failed'] as DeliveryPo['status'][])('treats %s as closed', (status) => {
     expect(isOpenForDelivery(status)).toBe(false);
+  });
+});
+
+// Reschedule calendar: the picked LOCAL day at the current time of day.
+describe('rescheduleTargetIso', () => {
+  it('keeps the picked local day and the current time of day', () => {
+    const iso = rescheduleTargetIso(new Date(2026, 10, 5), new Date(2026, 10, 3, 9, 30, 15));
+    const d = new Date(iso);
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 10, 5]);
+    expect([d.getHours(), d.getMinutes(), d.getSeconds()]).toEqual([9, 30, 15]);
+  });
+
+  it('matches the old "tomorrow" behaviour when tomorrow is picked', () => {
+    const now = new Date(2026, 10, 3, 14, 0, 0);
+    const iso = rescheduleTargetIso(new Date(2026, 10, 4), now);
+    expect(new Date(iso).getTime() - now.getTime()).toBe(24 * 60 * 60 * 1000);
+  });
+});
+
+// web 145: a down payment is listed at ₱0 — the customer decides the amount.
+describe('dueLabel', () => {
+  it('shows the amount due for a normal listing', () => {
+    expect(dueLabel({ due: 1500, isDownPayment: false })).toMatch(/^Due .*1,500/);
+  });
+
+  it('never shows "Due ₱0" for a down payment', () => {
+    expect(dueLabel({ due: 0, isDownPayment: true })).toBe('Customer decides');
   });
 });

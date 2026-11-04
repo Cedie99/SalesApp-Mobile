@@ -457,8 +457,9 @@ export async function upsertSyncedCollectionVisit(
        amount_collected, payment_method, payment_photo_url, delivery_receipt_photo_url,
        gps_lat, gps_lng, client_lat, client_lng, remarks, rescheduled_to, visited_at, claimed_by, claimed_at,
        claimed_by_name, is_additional, additional_received_at, additional_seen_at,
+       designated_payment_method, is_down_payment,
        created_at, updated_at, sync_status, local_updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?)
      ON CONFLICT(id) DO UPDATE SET
        client_id = excluded.client_id, client_name = excluded.client_name, area = excluded.area,
        status = excluded.status, scheduled_for = excluded.scheduled_for, amount_due = excluded.amount_due,
@@ -470,6 +471,7 @@ export async function upsertSyncedCollectionVisit(
        visited_at = excluded.visited_at, claimed_by = excluded.claimed_by, claimed_at = excluded.claimed_at,
        claimed_by_name = excluded.claimed_by_name, is_additional = excluded.is_additional,
        additional_received_at = excluded.additional_received_at, additional_seen_at = excluded.additional_seen_at,
+       designated_payment_method = excluded.designated_payment_method, is_down_payment = excluded.is_down_payment,
        created_at = excluded.created_at,
        updated_at = excluded.updated_at, sync_status = 'synced', sync_error = NULL,
        local_updated_at = excluded.local_updated_at
@@ -509,6 +511,11 @@ export async function upsertSyncedCollectionVisit(
       // still-unsynced "seen" intent.
       (row.additional_received_at as string) ?? null,
       (row.additional_seen_at as string) ?? null,
+      // web 143: the office-set payment method ('counter'), NULL = collector's
+      // choice. `is_down_payment` is absent until web ships the column
+      // (web migration 145) — reads as 0, a normal listing.
+      (row.designated_payment_method as string) ?? null,
+      row.is_down_payment ? 1 : 0,
       (row.created_at as string) ?? null,
       (row.updated_at as string) ?? null,
       now,
