@@ -6,6 +6,7 @@ import { ENTITY_REGISTRY, type EntityTableName } from './sync/entity-registry';
 import { syncAgendaPolicyAndCycles } from './sync/policy-sync-down';
 import { syncCutoffQuotaSnapshots } from './sync/cutoff-sync-down';
 import { syncPaymentLedgerDown } from './sync/payment-ledger-sync-down';
+import { pruneCollectionVisitsNotInPull } from './sync/collection-visit-scope';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { UserRole } from '../types';
 
@@ -64,7 +65,8 @@ const AGENT_SCOPED_COLUMN: Record<EntityTableName, string> = {
   client_meeting_holders: 'manager_id',
 };
 
-async function pullEntity(db: SQLiteDatabase, agentId: string, tableName: EntityTableName): Promise<void> {
+/** Returns the ids of the rows the server sent this pass. */
+async function pullEntity(db: SQLiteDatabase, agentId: string, tableName: EntityTableName): Promise<string[]> {
   const config = ENTITY_REGISTRY[tableName];
   const now = new Date().toISOString();
   const baseQuery = supabase.from(config.remoteTable as RemoteTableName).select('*');
@@ -93,6 +95,7 @@ async function pullEntity(db: SQLiteDatabase, agentId: string, tableName: Entity
       console.error(`[sync-down] failed to apply ${tableName} row ${(row as { id?: string }).id}:`, err);
     }
   }
+  return (data ?? []).map((row) => (row as { id?: string }).id).filter((id): id is string => !!id);
 }
 
 /**
@@ -168,11 +171,15 @@ export async function syncDown(agentId: string, teamId?: string | null, role?: U
   }
 
   // F-007 (web 043-046): pull the day's Collection & Delivery lists. Best-effort
-  // and role-gated by RLS — a collector gets all collection_visits and zero
+  // and role-gated by RLS — a collector gets collection_visits and zero
   // purchase_orders (and vice versa); every other role gets zero of both, no
   // error. Guarded so an empty/failed pull never aborts the rest of syncDown.
+  // Web 144: collection_visits is scoped to the collector's own stores, and
+  // stores that stopped being theirs are pruned (collection-visit-scope.ts).
+  // A failed pull throws before the prune, so nothing is deleted offline.
   try {
-    await pullEntity(db, agentId, 'collection_visits');
+    const visitIds = await pullEntity(db, agentId, 'collection_visits');
+    await pruneCollectionVisitsNotInPull(db, visitIds);
   } catch (err) {
     console.error('[sync-down] collection_visits pull failed:', err);
   }

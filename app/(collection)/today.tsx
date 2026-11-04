@@ -7,10 +7,12 @@ import { Text, View, XStack, YStack } from 'tamagui';
 import { useBizlinkColors, BIZLINK_FONTS, COLORS } from '../../lib/theme';
 import { Avatar } from '../../components/ui/Avatar';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { ListingInstructionBadges } from '../../components/collection-delivery/ListingInstructionBadges';
 import { BizTopBar } from '../../components/bizlink/BizTopBar';
 import { BizSectionHeader } from '../../components/bizlink/BizSectionHeader';
 import {
   formatClockTime,
+  dueLabel,
   formatPeso,
   formatShortDateTime,
   getCollectionSummary,
@@ -48,7 +50,7 @@ function StoreRow({ store, onPress }: { store: CollectionStore; onPress?: () => 
     >
       <Avatar initials={store.initials} size="sm" background={BIZLINK_COLORS.tintA} color={BIZLINK_COLORS.ink} />
       <YStack flex={1} gap="$0.5">
-        <XStack alignItems="center" gap="$1.5">
+        <XStack alignItems="center" gap="$1.5" flexWrap="wrap" rowGap="$1">
           <Text
             fontFamily={BIZLINK_FONTS.semibold}
             fontSize={13.5}
@@ -61,6 +63,7 @@ function StoreRow({ store, onPress }: { store: CollectionStore; onPress?: () => 
           {store.isAdditional && store.status === 'pending' ? (
             <StatusBadge label="Additional" background={COLORS.purpleSoft} color={COLORS.purple} />
           ) : null}
+          <ListingInstructionBadges store={store} />
         </XStack>
         <XStack gap="$2.5">
           <Text fontSize={10.5} fontFamily={BIZLINK_FONTS.medium} color={BIZLINK_COLORS.muted}>{store.area}</Text>
@@ -68,7 +71,7 @@ function StoreRow({ store, onPress }: { store: CollectionStore; onPress?: () => 
             {/* A part-paid store shows what it PAID today, never the remaining
                 balance — the owed figure is kept off the collector's screen
                 (anchoring-bias rule) and now lives in the store's credit balance. */}
-            {partial ? `Paid ${formatPeso(store.amountCollected ?? 0)}` : `Due ${formatPeso(store.due)}`}
+            {partial ? `Paid ${formatPeso(store.amountCollected ?? 0)}` : dueLabel(store)}
           </Text>
           {store.visitedAt ? (
             <Text fontSize={10.5} fontFamily={BIZLINK_FONTS.medium} color={BIZLINK_COLORS.muted}>{formatClockTime(store.visitedAt)}</Text>

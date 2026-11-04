@@ -9,6 +9,7 @@ import { useSession } from '../../lib/session-store';
 import { firstName, initialsFromName } from '../../lib/display-name';
 import { Avatar } from '../../components/ui/Avatar';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { ListingInstructionBadges } from '../../components/collection-delivery/ListingInstructionBadges';
 import { BizStatCard } from '../../components/bizlink/BizStatCard';
 import { BizSectionHeader } from '../../components/bizlink/BizSectionHeader';
 import { BizDashboardAlert } from '../../components/bizlink/BizDashboardAlert';
@@ -17,6 +18,7 @@ import { BizQuickActionGrid, computeQuickActionColumns } from '../../components/
 import { SyncStatusChip } from '../../components/sync/SyncStatusChip';
 import { SyncCenterSheet } from '../../components/sync/SyncCenterSheet';
 import {
+  dueLabel,
   formatPeso,
   formatPesoCompact,
   formatShortDateTime,
@@ -106,15 +108,16 @@ function RoutePreviewRow({ store, onPress }: { store: CollectionStore; onPress: 
       >
         <Avatar initials={store.initials} size="sm" background={BIZLINK_COLORS.tintA} color={BIZLINK_COLORS.ink} />
         <YStack flex={1} gap="$0.5">
-          <XStack alignItems="center" gap="$1.5">
+          <XStack alignItems="center" gap="$1.5" flexWrap="wrap" rowGap="$1">
             <Text fontFamily={BIZLINK_FONTS.semibold} fontSize={14} color={BIZLINK_COLORS.text} flexShrink={1}>{store.name}</Text>
             {store.isAdditional && store.status === 'pending' ? (
               <StatusBadge label="Additional" background={COLORS.purpleSoft} color={COLORS.purple} />
             ) : null}
+            <ListingInstructionBadges store={store} />
           </XStack>
           <Text fontSize={11.5} fontFamily={BIZLINK_FONTS.medium} color={BIZLINK_COLORS.muted}>
             {/* Owed balance stays off the collector's screen; a part-paid store shows what it paid. */}
-            {store.area} · {store.status === 'partial' ? `Paid ${formatPeso(store.amountCollected ?? 0)}` : `Due ${formatPeso(store.due)}`}
+            {store.area} · {store.status === 'partial' ? `Paid ${formatPeso(store.amountCollected ?? 0)}` : dueLabel(store)}
           </Text>
           {store.onTheWay && store.claimedBy ? (
             <XStack alignItems="center" gap="$1.5">

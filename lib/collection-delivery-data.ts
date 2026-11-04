@@ -41,6 +41,28 @@ export function isCollectionWorked(status: CollectionStoreStatus): boolean {
 export function remainingBalance(store: Pick<CollectionStore, 'due' | 'amountCollected'>): number {
   return Math.max(0, store.due - (store.amountCollected ?? 0));
 }
+
+/**
+ * The list row's amount text for an unpaid store. A down payment (web 145) is
+ * listed at ₱0 because the customer decides the amount, so "Due ₱0" would
+ * mislead — it reads "Customer decides" instead.
+ */
+export function dueLabel(store: Pick<CollectionStore, 'due' | 'isDownPayment'>): string {
+  return store.isDownPayment ? 'Customer decides' : `Due ${formatPeso(store.due)}`;
+}
+
+/**
+ * `rescheduled_to` (web 043, TIMESTAMPTZ) for a day picked on the calendar: that
+ * LOCAL calendar day at the current time of day — the same shape the old fixed
+ * "now + 24h" produced. Built from local date parts, never by adding to a UTC
+ * midnight, so a UTC+8 phone can't land on the day before.
+ */
+export function rescheduleTargetIso(day: Date, now: Date): string {
+  return new Date(
+    day.getFullYear(), day.getMonth(), day.getDate(),
+    now.getHours(), now.getMinutes(), now.getSeconds(),
+  ).toISOString();
+}
 /**
  * Collection payment methods — lowercase; 'counter' = paid at the store's own
  * counter, 'delivery_receipt' = documented by the delivery receipt only (no
@@ -203,6 +225,18 @@ export interface CollectionStore {
   syncedAt?: string;
   /** `scheduled_for` — the day this stop is planned for; used to scope the dashboard to TODAY. */
   scheduledFor?: string;
+  /**
+   * web 143 `designated_payment_method`: the office set this listing to be paid
+   * ONLY this way (currently only 'counter'). The picker is locked to it and the
+   * server rejects any other method. Undefined = collector's choice.
+   */
+  designatedMethod?: PaymentMethod;
+  /**
+   * web 145 `is_down_payment`: a down payment whose amount the CUSTOMER decides —
+   * listed with `due` 0, and any recorded amount settles it. Read the flag, never
+   * infer it from `due === 0` (web contract).
+   */
+  isDownPayment?: boolean;
 }
 
 export const COLLECTION_STORES: CollectionStore[] = [

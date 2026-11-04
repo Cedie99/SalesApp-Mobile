@@ -24,8 +24,8 @@ const CURRENT_LOCATION_COLUMNS = (t: string): string =>
 // local SQLite mirror (populated by syncDown, web 043-046). Mirrors
 // lib/useClients.ts exactly — fetch on mount + re-fetch on sync-complete so a
 // background pull right after login lands on screen without a manual refresh.
-// Field roles pull the WHOLE day's list (RLS-scoped), so there's no per-user
-// filter here.
+// No per-user filter here: the pull already scopes each field role's list
+// (collectors to their assigned stores, web 144 — lib/sync/collection-visit-scope.ts).
 
 export function useCollectionStores() {
   const db = useAppDb();

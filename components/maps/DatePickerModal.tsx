@@ -9,6 +9,15 @@ interface DatePickerModalProps {
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   onClose: () => void;
+  title?: string;
+  /** Days before this date are greyed out and can't be picked. */
+  minDate?: Date;
+  /** Confirm button text for the currently picked date. */
+  confirmLabel?: (date: Date) => string;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -26,7 +35,15 @@ function getFirstDayOfMonth(year: number, month: number): number {
  * Calendar date picker modal matching Image 3 design - month/year dropdowns,
  * week grid, orange highlights for Sundays and selected date, Confirm button.
  */
-export function DatePickerModal({ visible, selectedDate, onSelectDate, onClose }: DatePickerModalProps) {
+export function DatePickerModal({
+  visible,
+  selectedDate,
+  onSelectDate,
+  onClose,
+  title = 'Select Date',
+  minDate,
+  confirmLabel,
+}: DatePickerModalProps) {
   const BIZLINK_COLORS = useBizlinkColors();
   const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(selectedDate.getMonth());
@@ -35,6 +52,7 @@ export function DatePickerModal({ visible, selectedDate, onSelectDate, onClose }
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
   const today = new Date();
+  const minDay = minDate ? startOfDay(minDate) : null;
 
   function handleConfirm() {
     onSelectDate(tempSelectedDate);
@@ -82,7 +100,7 @@ export function DatePickerModal({ visible, selectedDate, onSelectDate, onClose }
         <Pressable onPress={(e) => e.stopPropagation()}>
           <YStack backgroundColor={BIZLINK_COLORS.card} borderRadius={32} padding={24} width={360} maxWidth="90%">
             <Text fontSize={24} fontFamily={BIZLINK_FONTS.semibold} color={BIZLINK_COLORS.text} marginBottom="$3">
-              Select Date
+              {title}
             </Text>
 
             {/* Month/Year Navigation */}
@@ -134,12 +152,13 @@ export function DatePickerModal({ visible, selectedDate, onSelectDate, onClose }
                     const isSelected = cellDate && tempSelectedDate.toDateString() === cellDate.toDateString();
                     const isSunday = dayIdx === 0;
                     const isToday = cellDate && cellDate.toDateString() === today.toDateString();
+                    const isBeforeMin = !!(cellDate && minDay && cellDate < minDay);
 
                     return (
                       <Pressable
                         key={dayIdx}
                         onPress={() => isCurrentMonth && day && handleDayPress(day as number)}
-                        disabled={!isCurrentMonth}
+                        disabled={!isCurrentMonth || isBeforeMin}
                         style={{ flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' }}
                       >
                         <View
@@ -158,7 +177,7 @@ export function DatePickerModal({ visible, selectedDate, onSelectDate, onClose }
                             color={
                               isSelected
                                 ? '#FFFFFF'
-                                : !isCurrentMonth
+                                : !isCurrentMonth || isBeforeMin
                                 ? BIZLINK_COLORS.soft
                                 : isSunday
                                 ? BIZLINK_COLORS.orange
@@ -179,7 +198,7 @@ export function DatePickerModal({ visible, selectedDate, onSelectDate, onClose }
             <Pressable onPress={handleConfirm} style={{ marginTop: 20 }}>
               <View backgroundColor={BIZLINK_COLORS.brand} borderRadius={16} paddingVertical={14} alignItems="center">
                 <Text fontSize={16} fontFamily={BIZLINK_FONTS.semibold} color="#FFFFFF">
-                  Confirm
+                  {confirmLabel ? confirmLabel(tempSelectedDate) : 'Confirm'}
                 </Text>
               </View>
             </Pressable>

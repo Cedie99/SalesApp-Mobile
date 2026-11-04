@@ -108,6 +108,18 @@ async function ensureClientCoordinateColumns(db: SQLiteDatabase): Promise<void> 
   await addColumnIfMissing(db, 'purchase_orders', 'client_lng', 'REAL');
 }
 
+/**
+ * The office's per-listing instructions on a collection_visit, mirrored so the
+ * collector can see them: `designated_payment_method` (web 143 — 'counter' locks
+ * the store to Counter payment) and `is_down_payment` (web 145 — a down payment
+ * whose amount the customer decides; listed with amount_due 0). Additive +
+ * unconditional, same reasoning as ensureClientCoordinateColumns above.
+ */
+async function ensureCollectionListingColumns(db: SQLiteDatabase): Promise<void> {
+  await addColumnIfMissing(db, 'collection_visits', 'designated_payment_method', 'TEXT');
+  await addColumnIfMissing(db, 'collection_visits', 'is_down_payment', 'INTEGER NOT NULL DEFAULT 0');
+}
+
 async function ensureRemittanceLinkColumns(db: SQLiteDatabase): Promise<void> {
   await addColumnIfMissing(db, 'collection_payments', 'remittance_id', 'TEXT');
   await addColumnIfMissing(db, 'collection_payments', 'pending_remittance_id', 'TEXT');
@@ -446,6 +458,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     await ensureCriticalTablesExist(db);
     await ensureRemittanceLinkColumns(db);
     await ensureClientCoordinateColumns(db);
+    await ensureCollectionListingColumns(db);
     await ensureCutoffRoleUsageRoles(db);
     await ensureCutoffDailyQuotaColumns(db);
     await ensureJointManagerTablesExist(db);
@@ -1919,6 +1932,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   await ensureCriticalTablesExist(db);
   await ensureRemittanceLinkColumns(db);
   await ensureClientCoordinateColumns(db);
+  await ensureCollectionListingColumns(db);
   await ensureCutoffRoleUsageRoles(db);
   await ensureCutoffDailyQuotaColumns(db);
   await ensureJointManagerTablesExist(db);

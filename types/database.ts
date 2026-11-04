@@ -534,6 +534,16 @@ export type Database = {
           is_additional: boolean;
           additional_received_at: string | null;
           additional_seen_at: string | null;
+          // 144 — the collector this listing is for (admin-set). The pull is
+          // scoped to it; NULL = shown to no collector. Distinct from
+          // claimed_by (en route) and collector_id (who actually worked it).
+          assigned_collector_id: string | null;
+          // 143 — office-set payment method for this listing; only 'counter' so
+          // far. NULL = collector's choice; any other method is rejected (23514).
+          designated_payment_method: 'counter' | null;
+          // 145 — listed as a down payment: the customer decides the amount, so
+          // amount_due is 0. Absent until 145 is applied to an environment.
+          is_down_payment?: boolean;
         };
         Insert: Partial<Database['public']['Tables']['collection_visits']['Row']>;
         Update: Partial<Database['public']['Tables']['collection_visits']['Row']>;
