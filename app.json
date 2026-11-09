@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sales App",
     "slug": "OracleSalesApp",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/oracle-logo.png",
     "userInterfaceStyle": "light",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.oracle.salesapp.v2",
-      "versionCode": 3,
+      "versionCode": 4,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/oracle-logo.png",
