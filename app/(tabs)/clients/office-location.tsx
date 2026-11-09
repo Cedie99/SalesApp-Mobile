@@ -120,7 +120,7 @@ export default function OfficeLocationScreen() {
   const sourceLabel = hasPin ? (client.office_pin_source === 'client_office_meeting' ? 'Source: Client Office meeting' : 'Source: Manual pin') : latestOfficeGps ? 'Latest start GPS from Client Office' : 'Choose a location to begin';
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <View flex={1} backgroundColor={colors.canvas}>
-    <LeafletWebViewMap markers={[]} onMarkerPress={() => {}} height={screenHeight} tileType={tileType} focusCoordinate={selected ? { lat: selected.lat, lng: selected.lng } : null} editablePin={currentPin ? { lat: currentPin.lat, lng: currentPin.lng, label: 'Office location' } : null} onPinDragEnd={({ lat, lng }) => { void choosePin({ lat, lng, address: 'Map location', source: 'drag' }); }} />
+    <LeafletWebViewMap markers={[]} onMarkerPress={() => {}} height={screenHeight} tileType={tileType} hasTopRightOverlay focusCoordinate={selected ? { lat: selected.lat, lng: selected.lng } : null} editablePin={currentPin ? { lat: currentPin.lat, lng: currentPin.lng, label: 'Office location' } : null} onPinDragEnd={({ lat, lng }) => { void choosePin({ lat, lng, address: 'Map location', source: 'drag' }); }} />
     <Pressable accessibilityLabel="Back" onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/clients')} style={[styles.floatingButton, styles.backButton]}><ArrowLeft size={21} color={colors.text} /></Pressable>
     <View style={styles.mapControls}>
       <Pressable accessibilityLabel={`Map style: ${tileType}`} onPress={cycleTileType} style={styles.floatingButton}><Layers size={19} color={colors.text} /></Pressable>

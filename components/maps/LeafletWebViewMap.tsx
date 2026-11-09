@@ -9,29 +9,34 @@ import { BIZLINK_COLORS, BIZLINK_FONTS } from '../../lib/theme';
 // pareho ang itsura — HUWAG react-native-maps/Google Maps." Leaflet + tile
 // layer are loaded from the CDN inside the WebView's local HTML string
 // (mirrors OracleSalesApp-Web's Leaflet 1.9.4 setup, not vendored into this
-// app) — never react-native-maps/Google Maps. The tile provider below is
-// CARTO light (the web repo's default, no paid API key) — confirm exact
-// tile URL / pin hex parity against a fresh `npm run web:status` before
-// merge; `WEB_STATUS.md` was not present in this working tree to verify
-// against directly.
+// app) — never react-native-maps/Google Maps.
+//
+// Light/Dark use OpenFreeMap because CARTO began requiring an API key and now
+// serves "API KEY REQUIRED" watermark tiles without one. OpenFreeMap needs no
+// key but is vector-only, so it is drawn by MapLibre inside a Leaflet layer;
+// pins, clusters and the pin editor stay plain Leaflet. The web repo's tile
+// setup must be changed to match, or the two apps will look different.
 
 export type MapTileType = 'light' | 'dark' | 'terrain';
 
-const TILE_URLS: Record<MapTileType, string> = {
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  terrain: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+const OPENFREEMAP_STYLE_URLS: Partial<Record<MapTileType, string>> = {
+  light: 'https://tiles.openfreemap.org/styles/positron',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
 };
 
-/** OpenTopoMap only serves tiles up to z17 — capping past that showed blank/gray tiles. CARTO light/dark serve up to z20. */
-const TILE_MAX_ZOOM: Record<MapTileType, number> = {
-  light: 19,
-  dark: 19,
-  terrain: 17,
-};
+const MAPLIBRE_CSS_LINK = '<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />';
+const MAPLIBRE_SCRIPT_TAGS = `<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>`;
 
-const CARTO_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+/** Terrain, and the fallback for a phone that cannot draw the vector maps (no WebGL). */
+const RASTER_TILE_URL = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+/** OpenTopoMap only serves tiles up to z17 — capping past that showed blank/gray tiles. */
+const RASTER_MAX_ZOOM = 17;
+const VECTOR_MAX_ZOOM = 19;
+
+/** The vector layer reads its own credit from the OpenFreeMap style, so only the raster layer needs this. */
+const RASTER_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors, SRTM &copy; <a href="https://opentopomap.org" target="_blank">OpenTopoMap</a> (CC-BY-SA)';
 /** Metro Manila — same default center as the web app's map-constants.ts. */
 const DEFAULT_CENTER: [number, number] = [14.55, 121.0];
 const DEFAULT_ZOOM = 12;
@@ -90,6 +95,8 @@ interface LeafletWebViewMapProps {
   onPinDragEnd?: (position: { lat: number; lng: number }) => void;
   /** Animate the map to a newly selected coordinate without rebuilding the WebView. */
   focusCoordinate?: { lat: number; lng: number } | null;
+  /** Keeps the required map credit clear of native buttons overlaid on the top-right of a full-screen map. */
+  hasTopRightOverlay?: boolean;
 }
 
 interface LeafletWebViewMapWithControlsProps {
@@ -103,7 +110,7 @@ interface LeafletWebViewMapWithControlsProps {
   onMarkerPress?: (id: string) => void;
 }
 
-function buildMapHtml(markers: LeafletMapMarker[], tileType: MapTileType, focusedMarkerId?: string | null, editablePin?: { lat: number; lng: number; label: string } | null): string {
+function buildMapHtml(markers: LeafletMapMarker[], tileType: MapTileType, focusedMarkerId?: string | null, editablePin?: { lat: number; lng: number; label: string } | null, hasTopRightOverlay = false): string {
   // `<` is escaped to `<` (valid inside a JS string literal, decodes to
   // the same character at runtime) so a company/location name containing a
   // literal `</script>` can never break out of the inline <script> block —
@@ -113,16 +120,19 @@ function buildMapHtml(markers: LeafletMapMarker[], tileType: MapTileType, focuse
   const markersJson = JSON.stringify(markers).replace(/</g, '\\u003c');
   const focusedMarker = focusedMarkerId ? markers.find((marker) => marker.id === focusedMarkerId) : null;
   const focusedMarkerIdJson = JSON.stringify(focusedMarker ? focusedMarkerId : null).replace(/</g, '\\u003c');
-  const tileUrl = TILE_URLS[tileType];
-  const tileMaxZoom = TILE_MAX_ZOOM[tileType];
-  
+  const vectorStyleUrl = OPENFREEMAP_STYLE_URLS[tileType];
+
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   ${MARKERCLUSTER_CSS_LINKS}
+  ${vectorStyleUrl ? MAPLIBRE_CSS_LINK : ''}
   <style>html,body,#map{height:100%;margin:0;padding:0;background:${BIZLINK_COLORS.canvas};}
+    /* Clears the rounded corners of the card the map sits in, which would clip the required credit. */
+    .leaflet-control-attribution{margin:8px 14px 0 0 !important;border-radius:6px;}
+    ${hasTopRightOverlay ? '.leaflet-control-attribution{margin-top:44px !important;margin-right:72px !important;max-width:calc(100vw - 144px);white-space:normal;}' : ''}
     .user-marker{width:40px;height:40px;border-radius:50%;background:#0B2545;border:3px solid #FFFFFF;box-shadow:0 2px 6px rgba(0,0,0,0.35);overflow:hidden;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:16px;}
     .user-avatar{width:100%;height:100%;object-fit:cover;display:block;}
     .pin-marker{width:34px;height:34px;border-radius:50%;border:2.5px solid #FFFFFF;box-shadow:0 2px 5px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:15px;}
@@ -148,6 +158,7 @@ function buildMapHtml(markers: LeafletMapMarker[], tileType: MapTileType, focuse
 <body>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  ${vectorStyleUrl ? MAPLIBRE_SCRIPT_TAGS : ''}
   ${MARKERCLUSTER_SCRIPT_TAG}
   <script>
     var markers = ${markersJson};
@@ -155,8 +166,26 @@ function buildMapHtml(markers: LeafletMapMarker[], tileType: MapTileType, focuse
     // zoomSnap/zoomDelta 0.5 → the +/- buttons and pinch move in half-levels, so
     // zooming is gradual instead of the jarring full-level jumps that made it easy
     // to overshoot; wheelPxPerZoomLevel smooths trackpad/scroll zoom too.
-    var map = L.map('map', { zoomControl: true, attributionControl: false, maxZoom: ${tileMaxZoom}, zoomSnap: 0.5, zoomDelta: 0.5, wheelPxPerZoomLevel: 70, bounceAtZoomLimits: false });
-    L.tileLayer('${tileUrl}', { attribution: '${CARTO_ATTRIBUTION}', maxZoom: ${tileMaxZoom} }).addTo(map);
+    var vectorStyleUrl = ${JSON.stringify(vectorStyleUrl ?? null)};
+    function canDrawVectorMap() {
+      if (!vectorStyleUrl || !L.maplibreGL) return false;
+      try {
+        var canvas = document.createElement('canvas');
+        return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+      } catch (_) {
+        return false;
+      }
+    }
+    var useVectorMap = canDrawVectorMap();
+    var map = L.map('map', { zoomControl: true, attributionControl: true, maxZoom: useVectorMap ? ${VECTOR_MAX_ZOOM} : ${RASTER_MAX_ZOOM}, zoomSnap: 0.5, zoomDelta: 0.5, wheelPxPerZoomLevel: 70, bounceAtZoomLimits: false });
+    // Top-right: the bottom corners sit under the native map-type and expand buttons.
+    map.attributionControl.setPosition('topright');
+    map.attributionControl.setPrefix(false);
+    if (useVectorMap) {
+      L.maplibreGL({ style: vectorStyleUrl }).addTo(map);
+    } else {
+      L.tileLayer('${RASTER_TILE_URL}', { attribution: '${RASTER_ATTRIBUTION}', maxZoom: ${RASTER_MAX_ZOOM} }).addTo(map);
+    }
 
     // Office/meeting pins (and plain fallback dots) cluster together when
     // close - the "you are here" user marker and the single draggable
@@ -312,11 +341,11 @@ function buildMapHtml(markers: LeafletMapMarker[], tileType: MapTileType, focuse
  * `window.ReactNativeWebView.postMessage`. Supports map type switching
  * (light/dark/terrain) and focused marker view (2026-08-05 redesign).
  */
-export function LeafletWebViewMap({ markers, onMarkerPress, height = 300, tileType = 'light', focusedMarkerId = null, editablePin = null, onPinDragEnd, focusCoordinate = null }: LeafletWebViewMapProps) {
+export function LeafletWebViewMap({ markers, onMarkerPress, height = 300, tileType = 'light', focusedMarkerId = null, editablePin = null, onPinDragEnd, focusCoordinate = null, hasTopRightOverlay = false }: LeafletWebViewMapProps) {
   const webViewRef = useRef<WebView>(null);
-  const html = useMemo(() => buildMapHtml(markers, tileType, focusedMarkerId, editablePin), [markers, tileType, focusedMarkerId, editablePin]);
-  // The map's Leaflet lib/CSS + tile images load over the network from
-  // unpkg.com/basemaps.cartocdn.com — this is the one part of the screen
+  const html = useMemo(() => buildMapHtml(markers, tileType, focusedMarkerId, editablePin, hasTopRightOverlay), [markers, tileType, focusedMarkerId, editablePin, hasTopRightOverlay]);
+  // The map's Leaflet lib/CSS + map data load over the network from
+  // unpkg.com/tiles.openfreemap.org — this is the one part of the screen
   // that structurally cannot be offline-first, so it needs its own
   // load-failure state distinct from the screen-level `isLikelyOnline()`
   // offline banner (which only reflects device connectivity, not whether
